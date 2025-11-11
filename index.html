@@ -13,14 +13,12 @@
 </head>
 <body>
 
-<a-scene mindar-image="imageTargetSrc: ./assets/hausschnitt.mind; filterMinCF: 0.0001; filterBeta: 0.05;" embedded vr-mode-ui="enabled: false">
+<a-scene mindar-image="imageTargetSrc: ./assets/hausschnitt.mind;" embedded vr-mode-ui="enabled: false">
   <a-camera position="0 0 0"></a-camera>
 
   <!-- AR-Inhalt -->
   <a-entity mindar-image-target="targetIndex: 0">
-    <a-entity id="schnittContainer" position="1 0.3 -0.1" rotation="0 180 0" stabilize-rotation="strength:0.2">
-      <a-gltf-model id="schnittModel" src="./assets/schnitt.glb" scale="1 1 1"></a-gltf-model>
-    </a-entity>
+    <a-gltf-model id="schnittModel" src="./assets/schnitt.glb" position="1 0.3 -0.1" rotation="0 180 0" scale="1 1 1" scale-to-target="scale: 1"></a-gltf-model>
   </a-entity>
 </a-scene>
 
@@ -43,18 +41,29 @@
 </div>
 
 <script>
-  // --- Custom rotation stabilizer ---
-  AFRAME.registerComponent('stabilize-rotation', {
-    schema: { strength: {default: 0.1} },
+  // Scale model relative to the detected target image size
+  AFRAME.registerComponent('scale-to-target', {
+    schema: {
+      scale: { type: 'number', default: 1 }  // multiplier for the detected image size
+    },
+    init: function () {
+      this.targetEl = document.querySelector('[mindar-image-target]');
+      this.initialized = false;
+    },
     tick: function () {
-      const rot = this.el.object3D.rotation;
-      // Damp small tilts so model doesn't wobble
-      rot.x *= (1 - this.data.strength);
-      rot.z *= (1 - this.data.strength);
+      if (!this.targetEl || this.initialized) return;
+      
+      // Wait for the target to have its scale computed by MindAR
+      const targetScale = this.targetEl.getAttribute('scale');
+      if (targetScale && typeof targetScale === 'object') {
+        // Scale the model based on target dimensions
+        const scale = Math.max(targetScale.x, targetScale.y, targetScale.z) * this.data.scale;
+        this.el.setAttribute('scale', `${scale} ${scale} ${scale}`);
+        this.initialized = true;
+      }
     }
   });
 
-  // --- Event setup and interactions ---
   const target = document.querySelector("[mindar-image-target]");
   const model = document.getElementById('schnittModel');
 
@@ -65,12 +74,10 @@
       console.log("Bild nicht mehr erkannt");
   });
 
-  // Touch-start for iOS (to start camera)
+  // Touch-Start für iOS
   document.body.addEventListener("click", () => {
-      const scene = document.querySelector("a-scene[mindar-image]");
-      if (scene && scene.components["mindar-image"]) {
-        try { scene.components["mindar-image"].start(); } catch(e) { console.warn(e); }
-      }
+      const scene = document.querySelector("a-scene");
+      scene.components["mindar-image"].start(); // Kamera starten
   }, {once: true});
 
   // Click on schnittModel to enter interior
