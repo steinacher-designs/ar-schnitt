@@ -18,44 +18,7 @@
 
   <!-- AR-Inhalt -->
   <a-entity mindar-image-target="targetIndex: 0">
-    <!-- Modell startet unsichtbar (scale 0). Wir nutzen Events zum sanften Ein-/Ausblenden
-         und die keep-level Komponente, damit das Modell X/Z-rotation gesperrt bleibt. -->
-    <!-- ======= schnittModel (3D Section) ======= -->
-    <!--
-         Configure visibility/orientation here:
-         - To change the fixed rotation that the model will keep, edit the lock-rotation attribute below.
-           Examples:
-             lock-rotation="rotation: 0 0 0"   -> front faces camera
-             lock-rotation="rotation: 0 90 0"  -> rotate 90 degrees around Y
-             lock-rotation="rotation: 0 180 0" -> flipped 180 degrees
-
-         - The model is positioned relative to the detected image by the anchor-to-target offset.
-           Change offset X/Y/Z to move it left/right/up/forward, e.g. offset: -0.4 0 -0.05
-
-         - If the model is invisible, first try:
-             1) set scale to 1 1 1
-             2) change lock-rotation to 0 0 0
-             3) move Z offset closer (e.g. -0.05)
-
-         - Quick runtime commands (browser console):
-             document.getElementById('schnittModel').setAttribute('rotation','0 0 0')
-             document.getElementById('schnittModel').setAttribute('lock-rotation','rotation: 0 0 0')
-             document.getElementById('schnittModel').emit('showModel')
-    -->
-    <a-gltf-model id="schnittModel" class="clickable"
-      src="./assets/schnitt.glb"
-      position="0 0 0"
-      rotation="0 180 0"
-      scale="0 0 0"
-      keep-level
-      <!-- lock-rotation: change these numbers to change the model's fixed orientation -->
-      lock-rotation="rotation: 0 180 0"
-      <!-- anchor-to-target offset: X Y Z (relative to the detected image). adjust to position model over picture -->
-  anchor-to-target="offset: -0.4 0 -0.1; lerp: 0.12; freezeOnFound: true"
-      animation__show="property: scale; from: 0 0 0; to: 1 1 1; dur: 300; startEvents: showModel"
-      animation__hide="property: scale; to: 0 0 0; dur: 200; startEvents: hideModel">
-    </a-gltf-model>
-    <!-- ======= end schnittModel ======= -->
+    <a-gltf-model id="schnittModel" src="./assets/schnitt.glb" position="1 0.3 -0.1" rotation="0 180 0" scale="1 1 1" scale-to-target="scale: 1"></a-gltf-model>
   </a-entity>
 </a-scene>
 
@@ -67,7 +30,7 @@
       <a-asset-item id="ganzModel" src="./assets/ganz.glb"></a-asset-item>
     </a-assets>
 
-    <!-- Player rig: camera with WASD and look controls. Default position inside house; adjust as needed -->
+    <!-- Player rig: camera with WASD and look controls -->
     <a-entity id="player" position="0 1.6 0">
       <a-camera wasd-controls="acceleration:50" look-controls></a-camera>
     </a-entity>
@@ -78,109 +41,26 @@
 </div>
 
 <script>
-  // Keep model level: sperrt X/Z-Rotation
-  // Anchor-to-target: smoothly set this entity's world transform to the detected target + offset.
-  // This reduces jitter by interpolating position and rotation.
-  AFRAME.registerComponent('anchor-to-target', {
+  // Scale model relative to the detected target image size
+  AFRAME.registerComponent('scale-to-target', {
     schema: {
-      target: { type: 'selector', default: undefined },
-      offset: { type: 'vec3', default: { x: 0, y: 0, z: 0 } },
-      lerp: { type: 'number', default: 0.12 },
-      freezeOnFound: { type: 'boolean', default: false }
+      scale: { type: 'number', default: 1 }  // multiplier for the detected image size
     },
     init: function () {
-      this.targetEl = this.data.target || document.querySelector('[mindar-image-target]');
-      this.targetObj = this.targetEl ? this.targetEl.object3D : null;
-      this.desiredPos = new AFRAME.THREE.Vector3();
-      this.desiredQuat = new AFRAME.THREE.Quaternion();
-      this.tmpParentQuat = new AFRAME.THREE.Quaternion();
-      this.tmpLocalPos = new AFRAME.THREE.Vector3();
-      this.frozen = false;
-      this.frozenLocalPos = new AFRAME.THREE.Vector3();
-
-      // If requested, listen for targetFound/targetLost on the target element to freeze position
-      if (this.data.freezeOnFound && this.targetEl) {
-        this._onFound = () => {
-          // compute desired world pos + offset immediately and store as frozen local pos
-          const desiredWorld = new AFRAME.THREE.Vector3();
-          this.targetObj.getWorldPosition(desiredWorld);
-          const targetQuat = new AFRAME.THREE.Quaternion();
-          this.targetObj.getWorldQuaternion(targetQuat);
-          const off = new AFRAME.THREE.Vector3(this.data.offset.x, this.data.offset.y, this.data.offset.z);
-          off.applyQuaternion(targetQuat);
-          desiredWorld.add(off);
-          // convert to parent-local
-          const parent = this.el.object3D.parent;
-          if (parent) {
-            this.frozenLocalPos.copy(desiredWorld);
-            parent.worldToLocal(this.frozenLocalPos);
-            this.frozen = true;
-          }
-        };
-        this._onLost = () => { this.frozen = false; };
-        this.targetEl.addEventListener('targetFound', this._onFound);
-        this.targetEl.addEventListener('targetLost', this._onLost);
-      }
+      this.targetEl = document.querySelector('[mindar-image-target]');
+      this.initialized = false;
     },
     tick: function () {
-      if (!this.targetObj) return;
-      // If frozen (we captured pose on targetFound), keep fixed local position
-      if (this.frozen) {
-        const elObjF = this.el.object3D;
-        elObjF.position.copy(this.frozenLocalPos);
-        return;
+      if (!this.targetEl || this.initialized) return;
+      
+      // Wait for the target to have its scale computed by MindAR
+      const targetScale = this.targetEl.getAttribute('scale');
+      if (targetScale && typeof targetScale === 'object') {
+        // Scale the model based on target dimensions
+        const scale = Math.max(targetScale.x, targetScale.y, targetScale.z) * this.data.scale;
+        this.el.setAttribute('scale', `${scale} ${scale} ${scale}`);
+        this.initialized = true;
       }
-      // Get target world position
-      this.targetObj.getWorldPosition(this.desiredPos);
-
-      // Apply offset in target's local space by rotating the offset vector by target quaternion
-      const targetQuat = new AFRAME.THREE.Quaternion();
-      this.targetObj.getWorldQuaternion(targetQuat);
-      const off = new AFRAME.THREE.Vector3(this.data.offset.x, this.data.offset.y, this.data.offset.z);
-      off.applyQuaternion(targetQuat);
-      this.desiredPos.add(off);
-
-      // Convert desired world position into local coordinates of this entity's parent
-      const elObj = this.el.object3D;
-      const parent = elObj.parent;
-      if (!parent) return;
-
-      this.tmpLocalPos.copy(this.desiredPos);
-      parent.worldToLocal(this.tmpLocalPos);
-
-      // Smoothly interpolate current local position toward target local position
-      elObj.position.lerp(this.tmpLocalPos, this.data.lerp);
-      // Note: we don't override rotation here to avoid conflicts; keep-level still enforces upright orientation
-    }
-  });
-
-  AFRAME.registerComponent('keep-level', {
-    tick: function () {
-      const el = this.el;
-      const rot = el.getAttribute('rotation');
-      if (!rot) return;
-      // Nur Y-Rotation beibehalten
-      if (Math.abs(rot.x) > 0.0001 || Math.abs(rot.z) > 0.0001) {
-        el.setAttribute('rotation', { x: 0, y: rot.y, z: 0 });
-      }
-    }
-  });
-
-  // Lock rotation: enforce a fixed rotation (in degrees) every frame so the model never rotates
-  AFRAME.registerComponent('lock-rotation', {
-    schema: {
-      rotation: { type: 'vec3', default: { x: 0, y: 0, z: 0 } }
-    },
-    init: function () {
-      // store fixed rotation in degrees
-      const r = this.data.rotation;
-      this.fixed = { x: r.x, y: r.y, z: r.z };
-      // apply immediately
-      this.el.setAttribute('rotation', this.fixed);
-    },
-    tick: function () {
-      // enforce rotation every frame (prevents tracker-induced rotation)
-      this.el.setAttribute('rotation', this.fixed);
     }
   });
 
@@ -188,57 +68,55 @@
   const model = document.getElementById('schnittModel');
 
   target.addEventListener("targetFound", () => {
-    console.log("Bild erkannt – Tracking läuft weiter!");
-    // Sanft einblenden
-    model.emit('showModel');
+      console.log("Bild erkannt – Tracking läuft weiter!");
   });
   target.addEventListener("targetLost", () => {
-    console.log("Bild nicht mehr erkannt");
-    // Sanft ausblenden
-    model.emit('hideModel');
+      console.log("Bild nicht mehr erkannt");
   });
 
   // Touch-Start für iOS
   document.body.addEventListener("click", () => {
-    const scene = document.querySelector("a-scene");
-    scene.components["mindar-image"].start(); // Kamera starten
+      const scene = document.querySelector("a-scene");
+      scene.components["mindar-image"].start(); // Kamera starten
   }, {once: true});
 
-  // Öffne das Innenraum-Erlebnis, wenn das Schnitt-Modell angetippt wird
+  // Click on schnittModel to enter interior
   model.addEventListener('click', openInterior);
 
   function openInterior() {
     const arScene = document.querySelector('a-scene[mindar-image]');
-    // Stoppe MindAR (Kamera) und verstecke die AR-Szene
+    // Stop MindAR and hide AR scene
     if (arScene && arScene.components && arScene.components['mindar-image']) {
       try { arScene.components['mindar-image'].stop(); } catch(e) { console.warn(e); }
     }
     if (arScene) arScene.style.display = 'none';
 
-    // Zeige das Innenraum-Overlay
+    // Show interior overlay
     const container = document.getElementById('interiorContainer');
     container.style.display = 'block';
 
-    // Optional: setze die Player-Startposition ins Haus (anpassen falls nötig)
+    // Set player position inside the house
     const player = document.getElementById('player');
     if (player) {
       player.setAttribute('position', '0 1.6 0');
     }
   }
 
-  // Schließe das Innenraum-Erlebnis und starte AR wieder
+  // Close interior and return to AR
   const closeBtn = document.getElementById('closeInterior');
-  closeBtn.addEventListener('click', () => {
-    const container = document.getElementById('interiorContainer');
-    container.style.display = 'none';
-    const arScene = document.querySelector('a-scene[mindar-image]');
-    if (arScene) arScene.style.display = 'block';
-    if (arScene && arScene.components && arScene.components['mindar-image']) {
-      try { arScene.components['mindar-image'].start(); } catch(e) { console.warn(e); }
-    }
-  });
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      const container = document.getElementById('interiorContainer');
+      container.style.display = 'none';
+      const arScene = document.querySelector('a-scene[mindar-image]');
+      if (arScene) arScene.style.display = 'block';
+      if (arScene && arScene.components && arScene.components['mindar-image']) {
+        try { arScene.components['mindar-image'].start(); } catch(e) { console.warn(e); }
+      }
+    });
+  }
 
-  // Wenn das Hausmodell geladen ist, positioniere den Player automatisch in der Mitte (leicht erhöht)
+  // Auto-position player in center of ganz.glb when loaded
   const ganzEntity = document.getElementById('ganzEntity');
   if (ganzEntity) {
     ganzEntity.addEventListener('model-loaded', () => {
@@ -249,7 +127,6 @@
           const center = box.getCenter(new AFRAME.THREE.Vector3());
           const player = document.getElementById('player');
           if (player) {
-            // setze Spieler leicht über Boden (center.y + 1.6)
             player.setAttribute('position', `${center.x} ${center.y + 1.6} ${center.z}`);
           }
         }
