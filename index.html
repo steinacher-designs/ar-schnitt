@@ -18,18 +18,19 @@
 </head>
 <body>
 
-<!-- === AR SCENE === -->
+<!-- === AR SCENE WITH CAMERA FEED === -->
 <a-scene
   mindar-image="imageTargetSrc: ./assets/hausschnitt.mind; filterMinCF: 0.0001; filterBeta: 0.05;"
   embedded
   vr-mode-ui="enabled: false"
   device-orientation-permission-ui="enabled: true"
+  background="color: transparent"
 >
+  <!-- Camera -->
   <a-camera position="0 0 0"></a-camera>
 
-  <!-- When the target image is detected, attach the 3D overlay -->
+  <!-- AR overlay attached to target image -->
   <a-entity mindar-image-target="targetIndex: 0">
-    <!-- Wrapper for stabilizing the model -->
     <a-entity id="overlayWrapper" position="1 0.3 -0.1" rotation="0 180 0" stabilize-rotation="strength:0.2">
       <a-gltf-model
         id="schnittModel"
