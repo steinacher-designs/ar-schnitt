@@ -68,32 +68,6 @@
       try { scene.components["mindar-image"].start(); } catch(e) { console.warn(e); }
     }
   }, { once: true });
-
-  // === Initialize camera feed on page load ===
-  window.addEventListener('load', () => {
-    setTimeout(() => {
-      const scene = document.querySelector("a-scene[mindar-image]");
-      if (scene && scene.components["mindar-image"]) {
-        try {
-          scene.components["mindar-image"].start();
-          console.log("✅ Camera feed started");
-        } catch(e) {
-          console.warn("⚠️ Camera start failed:", e);
-        }
-      }
-    }, 500);
-  });
-
-  // === Request camera permissions explicitly ===
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    .then(stream => {
-      console.log("✅ Camera permission granted");
-      stream.getTracks().forEach(track => track.stop());
-    })
-    .catch(err => {
-      console.warn("⚠️ Camera permission denied or unavailable:", err);
-    });
-
 </script>
 
 </body>
