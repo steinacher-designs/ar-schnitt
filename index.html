@@ -65,8 +65,6 @@
   });
 
   const target = document.querySelector("[mindar-image-target]");
-  const model = document.getElementById('schnittModel');
-
   target.addEventListener("targetFound", () => {
       console.log("Bild erkannt – Tracking läuft weiter!");
   });
@@ -79,60 +77,6 @@
       const scene = document.querySelector("a-scene");
       scene.components["mindar-image"].start(); // Kamera starten
   }, {once: true});
-
-  // Click on schnittModel to enter interior
-  model.addEventListener('click', openInterior);
-
-  function openInterior() {
-    const arScene = document.querySelector('a-scene[mindar-image]');
-    // Stop MindAR and hide AR scene
-    if (arScene && arScene.components && arScene.components['mindar-image']) {
-      try { arScene.components['mindar-image'].stop(); } catch(e) { console.warn(e); }
-    }
-    if (arScene) arScene.style.display = 'none';
-
-    // Show interior overlay
-    const container = document.getElementById('interiorContainer');
-    container.style.display = 'block';
-
-    // Set player position inside the house
-    const player = document.getElementById('player');
-    if (player) {
-      player.setAttribute('position', '0 1.6 0');
-    }
-  }
-
-  // Close interior and return to AR
-  const closeBtn = document.getElementById('closeInterior');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      const container = document.getElementById('interiorContainer');
-      container.style.display = 'none';
-      const arScene = document.querySelector('a-scene[mindar-image]');
-      if (arScene) arScene.style.display = 'block';
-      if (arScene && arScene.components && arScene.components['mindar-image']) {
-        try { arScene.components['mindar-image'].start(); } catch(e) { console.warn(e); }
-      }
-    });
-  }
-
-  // Auto-position player in center of ganz.glb when loaded
-  const ganzEntity = document.getElementById('ganzEntity');
-  if (ganzEntity) {
-    ganzEntity.addEventListener('model-loaded', () => {
-      try {
-        const obj = ganzEntity.getObject3D('mesh');
-        if (obj) {
-          const box = new AFRAME.THREE.Box3().setFromObject(obj);
-          const center = box.getCenter(new AFRAME.THREE.Vector3());
-          const player = document.getElementById('player');
-          if (player) {
-            player.setAttribute('position', `${center.x} ${center.y + 1.6} ${center.z}`);
-          }
-        }
-      } catch (e) { console.warn('Positioning interior player failed', e); }
-    });
-  }
 </script>
 
 </body>
