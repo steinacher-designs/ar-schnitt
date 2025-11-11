@@ -14,22 +14,20 @@
 <body>
 
 <a-scene mindar-image="imageTargetSrc: ./assets/hausschnitt.mind;" embedded vr-mode-ui="enabled: false">
-  <a-camera position="0 0 0"></a-camera>
-
-  <!-- AR-Inhalt -->
-  <a-entity mindar-image-target="targetIndex: 0">
-    <!-- Modell startet unsichtbar (scale 0). Wir nutzen Events zum sanften Ein-/Ausblenden
-         und die keep-level Komponente, damit das Modell X/Z-rotation gesperrt bleibt. -->
+  <!-- Camera with a screen-fixed model as child so the model is always centered on screen -->
+  <a-camera id="mainCamera" position="0 0 0">
     <a-gltf-model id="schnittModel" class="clickable"
            src="./assets/schnitt.glb"
-           position="1 0 -0.1"
+           position="0 0 -0.8"
            rotation="0 180 0"
            scale="0 0 0"
-           keep-level
            animation__show="property: scale; from: 0 0 0; to: 1 1 1; dur: 300; startEvents: showModel"
            animation__hide="property: scale; to: 0 0 0; dur: 200; startEvents: hideModel">
     </a-gltf-model>
-  </a-entity>
+  </a-camera>
+
+  <!-- AR-Inhalt (keeps target entity to receive targetFound/targetLost events) -->
+  <a-entity mindar-image-target="targetIndex: 0"></a-entity>
 </a-scene>
 
 <!-- Interior overlay (hidden until schnittModel is clicked) -->
