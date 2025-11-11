@@ -21,13 +21,14 @@
     <!-- Modell startet unsichtbar (scale 0). Wir nutzen Events zum sanften Ein-/Ausblenden
          und die keep-level Komponente, damit das Modell X/Z-rotation gesperrt bleibt. -->
     <a-gltf-model id="schnittModel" class="clickable"
-           src="./assets/schnitt.glb"
-           position="-0.4 0 -0.1"
-           rotation="0 180 0"
-           scale="0 0 0"
-           keep-level
-           animation__show="property: scale; from: 0 0 0; to: 1 1 1; dur: 300; startEvents: showModel"
-           animation__hide="property: scale; to: 0 0 0; dur: 200; startEvents: hideModel">
+      src="./assets/schnitt.glb"
+      position="0 0 0"
+      rotation="0 180 0"
+      scale="0 0 0"
+      keep-level
+      anchor-to-target="offset: -0.4 0 -0.1; lerp: 0.12"
+      animation__show="property: scale; from: 0 0 0; to: 1 1 1; dur: 300; startEvents: showModel"
+      animation__hide="property: scale; to: 0 0 0; dur: 200; startEvents: hideModel">
     </a-gltf-model>
   </a-entity>
 </a-scene>
@@ -52,6 +53,48 @@
 
 <script>
   // Keep model level: sperrt X/Z-Rotation
+  // Anchor-to-target: smoothly set this entity's world transform to the detected target + offset.
+  // This reduces jitter by interpolating position and rotation.
+  AFRAME.registerComponent('anchor-to-target', {
+    schema: {
+      target: { type: 'selector', default: undefined },
+      offset: { type: 'vec3', default: { x: 0, y: 0, z: 0 } },
+      lerp: { type: 'number', default: 0.12 }
+    },
+    init: function () {
+      this.targetEl = this.data.target || document.querySelector('[mindar-image-target]');
+      this.targetObj = this.targetEl ? this.targetEl.object3D : null;
+      this.desiredPos = new AFRAME.THREE.Vector3();
+      this.desiredQuat = new AFRAME.THREE.Quaternion();
+      this.tmpParentQuat = new AFRAME.THREE.Quaternion();
+      this.tmpLocalPos = new AFRAME.THREE.Vector3();
+    },
+    tick: function () {
+      if (!this.targetObj) return;
+      // Get target world position
+      this.targetObj.getWorldPosition(this.desiredPos);
+
+      // Apply offset in target's local space by rotating the offset vector by target quaternion
+      const targetQuat = new AFRAME.THREE.Quaternion();
+      this.targetObj.getWorldQuaternion(targetQuat);
+      const off = new AFRAME.THREE.Vector3(this.data.offset.x, this.data.offset.y, this.data.offset.z);
+      off.applyQuaternion(targetQuat);
+      this.desiredPos.add(off);
+
+      // Convert desired world position into local coordinates of this entity's parent
+      const elObj = this.el.object3D;
+      const parent = elObj.parent;
+      if (!parent) return;
+
+      this.tmpLocalPos.copy(this.desiredPos);
+      parent.worldToLocal(this.tmpLocalPos);
+
+      // Smoothly interpolate current local position toward target local position
+      elObj.position.lerp(this.tmpLocalPos, this.data.lerp);
+      // Note: we don't override rotation here to avoid conflicts; keep-level still enforces upright orientation
+    }
+  });
+
   AFRAME.registerComponent('keep-level', {
     tick: function () {
       const el = this.el;
