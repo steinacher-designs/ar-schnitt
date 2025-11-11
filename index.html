@@ -20,17 +20,42 @@
   <a-entity mindar-image-target="targetIndex: 0">
     <!-- Modell startet unsichtbar (scale 0). Wir nutzen Events zum sanften Ein-/Ausblenden
          und die keep-level Komponente, damit das Modell X/Z-rotation gesperrt bleibt. -->
+    <!-- ======= schnittModel (3D Section) ======= -->
+    <!--
+         Configure visibility/orientation here:
+         - To change the fixed rotation that the model will keep, edit the lock-rotation attribute below.
+           Examples:
+             lock-rotation="rotation: 0 0 0"   -> front faces camera
+             lock-rotation="rotation: 0 90 0"  -> rotate 90 degrees around Y
+             lock-rotation="rotation: 0 180 0" -> flipped 180 degrees
+
+         - The model is positioned relative to the detected image by the anchor-to-target offset.
+           Change offset X/Y/Z to move it left/right/up/forward, e.g. offset: -0.4 0 -0.05
+
+         - If the model is invisible, first try:
+             1) set scale to 1 1 1
+             2) change lock-rotation to 0 0 0
+             3) move Z offset closer (e.g. -0.05)
+
+         - Quick runtime commands (browser console):
+             document.getElementById('schnittModel').setAttribute('rotation','0 0 0')
+             document.getElementById('schnittModel').setAttribute('lock-rotation','rotation: 0 0 0')
+             document.getElementById('schnittModel').emit('showModel')
+    -->
     <a-gltf-model id="schnittModel" class="clickable"
       src="./assets/schnitt.glb"
       position="0 0 0"
       rotation="0 180 0"
       scale="0 0 0"
       keep-level
+      <!-- lock-rotation: change these numbers to change the model's fixed orientation -->
       lock-rotation="rotation: 0 180 0"
-      anchor-to-target="offset: -0.4 0 -0.1; lerp: 0.12"
+      <!-- anchor-to-target offset: X Y Z (relative to the detected image). adjust to position model over picture -->
+  anchor-to-target="offset: -0.4 0 -0.1; lerp: 0.12; freezeOnFound: true"
       animation__show="property: scale; from: 0 0 0; to: 1 1 1; dur: 300; startEvents: showModel"
       animation__hide="property: scale; to: 0 0 0; dur: 200; startEvents: hideModel">
     </a-gltf-model>
+    <!-- ======= end schnittModel ======= -->
   </a-entity>
 </a-scene>
 
@@ -60,7 +85,8 @@
     schema: {
       target: { type: 'selector', default: undefined },
       offset: { type: 'vec3', default: { x: 0, y: 0, z: 0 } },
-      lerp: { type: 'number', default: 0.12 }
+      lerp: { type: 'number', default: 0.12 },
+      freezeOnFound: { type: 'boolean', default: false }
     },
     init: function () {
       this.targetEl = this.data.target || document.querySelector('[mindar-image-target]');
@@ -69,9 +95,41 @@
       this.desiredQuat = new AFRAME.THREE.Quaternion();
       this.tmpParentQuat = new AFRAME.THREE.Quaternion();
       this.tmpLocalPos = new AFRAME.THREE.Vector3();
+      this.frozen = false;
+      this.frozenLocalPos = new AFRAME.THREE.Vector3();
+
+      // If requested, listen for targetFound/targetLost on the target element to freeze position
+      if (this.data.freezeOnFound && this.targetEl) {
+        this._onFound = () => {
+          // compute desired world pos + offset immediately and store as frozen local pos
+          const desiredWorld = new AFRAME.THREE.Vector3();
+          this.targetObj.getWorldPosition(desiredWorld);
+          const targetQuat = new AFRAME.THREE.Quaternion();
+          this.targetObj.getWorldQuaternion(targetQuat);
+          const off = new AFRAME.THREE.Vector3(this.data.offset.x, this.data.offset.y, this.data.offset.z);
+          off.applyQuaternion(targetQuat);
+          desiredWorld.add(off);
+          // convert to parent-local
+          const parent = this.el.object3D.parent;
+          if (parent) {
+            this.frozenLocalPos.copy(desiredWorld);
+            parent.worldToLocal(this.frozenLocalPos);
+            this.frozen = true;
+          }
+        };
+        this._onLost = () => { this.frozen = false; };
+        this.targetEl.addEventListener('targetFound', this._onFound);
+        this.targetEl.addEventListener('targetLost', this._onLost);
+      }
     },
     tick: function () {
       if (!this.targetObj) return;
+      // If frozen (we captured pose on targetFound), keep fixed local position
+      if (this.frozen) {
+        const elObjF = this.el.object3D;
+        elObjF.position.copy(this.frozenLocalPos);
+        return;
+      }
       // Get target world position
       this.targetObj.getWorldPosition(this.desiredPos);
 
